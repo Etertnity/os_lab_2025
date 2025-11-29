@@ -14,6 +14,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 void do_one_thing(int *);
 void do_another_thing(int *);
@@ -22,11 +23,27 @@ int common = 0; /* A shared variable for two threads */
 int r1 = 0, r2 = 0, r3 = 0;
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
 
+/*
+ * Compile without synchronization:
+ *   gcc -pthread mutex.c -o mutex_nomutex
+ *
+ * Compile with synchronization enabled:
+ *   gcc -pthread -DUSE_MUTEX mutex.c -o mutex_mutex
+ */
+
+#ifdef USE_MUTEX
+#define LOCK() pthread_mutex_lock(&mut)
+#define UNLOCK() pthread_mutex_unlock(&mut)
+#else
+#define LOCK()
+#define UNLOCK()
+#endif
+
 int main() {
   pthread_t thread1, thread2;
 
-  if (pthread_create(&thread1, NULL, (void *)do_one_thing,
-			  (void *)&common) != 0) {
+  if (pthread_create(&thread1, NULL, (void *)do_one_thing, (void *)&common) !=
+      0) {
     perror("pthread_create");
     exit(1);
   }
@@ -53,11 +70,11 @@ int main() {
 }
 
 void do_one_thing(int *pnum_times) {
-  int i, j, x;
+  int i;
   unsigned long k;
   int work;
   for (i = 0; i < 50; i++) {
-    // pthread_mutex_lock(&mut);
+    LOCK();
     printf("doing one thing\n");
     work = *pnum_times;
     printf("counter = %d\n", work);
@@ -65,16 +82,16 @@ void do_one_thing(int *pnum_times) {
     for (k = 0; k < 500000; k++)
       ;                 /* long cycle */
     *pnum_times = work; /* write back */
-	// pthread_mutex_unlock(&mut);
+    UNLOCK();
   }
 }
 
 void do_another_thing(int *pnum_times) {
-  int i, j, x;
+  int i;
   unsigned long k;
   int work;
   for (i = 0; i < 50; i++) {
-    // pthread_mutex_lock(&mut);
+    LOCK();
     printf("doing another thing\n");
     work = *pnum_times;
     printf("counter = %d\n", work);
@@ -82,11 +99,8 @@ void do_another_thing(int *pnum_times) {
     for (k = 0; k < 500000; k++)
       ;                 /* long cycle */
     *pnum_times = work; /* write back */
-    // pthread_mutex_unlock(&mut);
+    UNLOCK();
   }
 }
 
-void do_wrap_up(int counter) {
-  int total;
-  printf("All done, counter = %d\n", counter);
-}
+void do_wrap_up(int counter) { printf("All done, counter = %d\n", counter); }
